@@ -9,3 +9,6 @@ build/
 .cache/
 data/.cache/
 data/portfolio.csv
+data/historical/
+.mypy_cache/
+.ruff_cache/
