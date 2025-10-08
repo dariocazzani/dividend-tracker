@@ -71,6 +71,18 @@ uv run dividend-tracker --no-metrics
 
 # Combine options
 uv run dividend-tracker --summary --quiet --export results.csv
+
+# Compare multiple portfolios
+uv run dividend-tracker --compare data/portfolio_aggressive.csv data/portfolio_conservative.csv
+
+# Save projection to historical data
+uv run dividend-tracker --save-historical
+
+# View historical tracking summary
+uv run dividend-tracker --show-history
+
+# Enable verbose logging
+uv run dividend-tracker --verbose
 ```
 
 ## Options
@@ -81,6 +93,10 @@ uv run dividend-tracker --summary --quiet --export results.csv
 - `--no-cache` - Bypass cache, fetch fresh data
 - `--export FILE` - Export to CSV
 - `--no-metrics` - Skip portfolio metrics table
+- `--verbose` - Enable verbose logging
+- `--compare FILE [FILE ...]` - Compare multiple portfolio files
+- `--save-historical` - Save results to historical data
+- `--show-history` - Show historical tracking summary
 
 ## Features
 
@@ -98,14 +114,55 @@ uv run dividend-tracker --summary --quiet --export results.csv
 
 ✅ **Beautiful Output** - Rich terminal formatting with tables and colors
 
+✅ **Comparison Mode** - Compare multiple portfolio scenarios side-by-side
+
+✅ **Historical Tracking** - Save and review projections over time
+
+✅ **Type Safety** - Full type hints with mypy checking
+
+✅ **Code Quality** - Ruff linting and formatting, pre-commit hooks
+
+## Comparison Mode
+
+Compare different portfolio strategies or scenarios:
+
+```bash
+uv run dividend-tracker --compare data/portfolio_aggressive.csv data/portfolio_conservative.csv
+```
+
+This displays:
+- Side-by-side portfolio value and yield comparison
+- Monthly dividend breakdown for each portfolio
+- Total annual dividends and average monthly income
+
+## Historical Tracking
+
+Track your projections over time:
+
+```bash
+# Save today's projection
+uv run dividend-tracker --save-historical
+
+# View all historical runs
+uv run dividend-tracker --show-history
+```
+
+Historical data is stored in `data/historical/` (not tracked in git) and shows:
+- Total number of runs
+- Date range of tracking
+- Recent projection dates
+
 ## Module Responsibilities
 
 - **__main__.py** - Main entry point, argument parsing
 - **core/portfolio.py** - Loads and validates portfolio.csv
-- **api/dividend_api.py** - Fetches dividend data from yfinance, manages cache
 - **core/calculator.py** - All calculation logic (dividends, metrics)
+- **core/comparison.py** - Portfolio comparison logic
+- **core/historical.py** - Historical data storage and retrieval
+- **api/dividend_api.py** - Fetches dividend data from yfinance, manages cache
 - **ui/display.py** - All Rich console formatting and output
 - **ui/export.py** - CSV export functionality
+- **utils/logging_config.py** - Logging configuration
 
 Each module is focused on a single responsibility for easy maintenance.
 
@@ -115,9 +172,51 @@ Each module is focused on a single responsibility for easy maintenance.
 - Dividend data: Yahoo Finance historical dividends
 - Cache: Local JSON files in `.cache/` directory
 
+## Development
+
+This project uses modern Python development tools for code quality:
+
+### Tools
+
+- **Ruff**: Fast Python linter and formatter
+- **Mypy**: Static type checking
+- **Pre-commit**: Automated git hooks for quality checks
+
+### Make Commands
+
+```bash
+make help       # Show all available commands
+make install    # Install dependencies with uv
+make lint       # Run linting checks
+make format     # Format code with ruff
+make typecheck  # Run type checking with mypy
+make check      # Run all checks (lint + typecheck)
+make run        # Run the dividend tracker
+make clean      # Clean cache and build artifacts
+```
+
+### Running Checks
+
+Before committing:
+
+```bash
+make check
+```
+
+Pre-commit hooks will automatically run ruff and format checks on `git commit`.
+
+### Type Hints
+
+All modules use modern Python 3.13 type hints:
+- Union types with `|` syntax
+- Optional types with `| None`
+- Type aliases for complex types
+- Full function signatures
+
 ## Notes
 
 - Cache expires after 24 hours
 - Projections assume dividends remain constant
 - Cost basis is optional but enables gain/loss tracking
 - No API key required (uses yfinance)
+- Historical data stored in `data/historical/` (gitignored)
