@@ -1,0 +1,20 @@
+[project]
+name = "dividend-tracker"
+version = "0.1.0"
+description = "A tool for projecting dividend income from your portfolio"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "rich>=14.1.0",
+    "yfinance>=0.2.66",
+]
+
+[project.scripts]
+dividend-tracker = "dividend_tracker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dividend_tracker"]
