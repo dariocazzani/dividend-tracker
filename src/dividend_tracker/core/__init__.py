@@ -9,6 +9,8 @@ from .calculator import (
 from .comparison import compare_portfolios, display_comparison
 from .historical import (
     check_historical_exists,
+    display_historical_run,
+    display_historical_trend,
     get_historical_summary,
     list_historical_dates,
     load_historical,
@@ -29,4 +31,6 @@ __all__ = [
     "check_historical_exists",
     "list_historical_dates",
     "get_historical_summary",
+    "display_historical_run",
+    "display_historical_trend",
 ]
