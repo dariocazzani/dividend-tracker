@@ -50,11 +50,55 @@ def main() -> None:
     parser.add_argument(
         "--show-history", action="store_true", help="Show historical tracking summary"
     )
+    parser.add_argument(
+        "--view-historical",
+        type=str,
+        metavar="DATE",
+        help='View historical projection (YYYY-MM-DD or "latest")',
+    )
+    parser.add_argument(
+        "--historical-trend", action="store_true", help="Show portfolio trends from historical data"
+    )
+    parser.add_argument(
+        "--trend-days",
+        type=int,
+        default=90,
+        help="Number of days for trend analysis (default: 90)",
+    )
 
     args = parser.parse_args()
 
     # Setup logging
     setup_logging(verbose=args.verbose)
+
+    # Handle view historical before any other processing
+    if args.view_historical:
+        from datetime import datetime
+
+        from .core import display_historical_run
+
+        if args.view_historical.lower() == "latest":
+            display_historical_run("latest")
+        else:
+            try:
+                date = datetime.strptime(args.view_historical, "%Y-%m-%d")
+                display_historical_run(date)
+            except ValueError:
+                console.print("[red]Error: Invalid date format[/red]")
+                console.print("[yellow]Use YYYY-MM-DD format or 'latest'[/yellow]")
+                console.print(
+                    "[dim]Example: uv run dividend-tracker --view-historical 2025-10-08[/dim]"
+                )
+                return
+
+        return  # Exit after displaying historical run
+
+    # Handle trend analysis before any other processing
+    if args.historical_trend:
+        from .core import display_historical_trend
+
+        display_historical_trend(args.trend_days)
+        return  # Exit after displaying trend
 
     # Show history if requested
     if args.show_history:
