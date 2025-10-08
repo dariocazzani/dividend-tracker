@@ -97,6 +97,9 @@ uv run dividend-tracker --verbose
 - `--compare FILE [FILE ...]` - Compare multiple portfolio files
 - `--save-historical` - Save results to historical data
 - `--show-history` - Show historical tracking summary
+- `--view-historical DATE` - View specific historical projection (YYYY-MM-DD or "latest")
+- `--historical-trend` - Show portfolio value and dividend trends
+- `--trend-days N` - Number of days for trend analysis (default: 90)
 
 ## Features
 
@@ -116,7 +119,7 @@ uv run dividend-tracker --verbose
 
 ✅ **Comparison Mode** - Compare multiple portfolio scenarios side-by-side
 
-✅ **Historical Tracking** - Save and review projections over time
+✅ **Historical Tracking** - Save, view, and analyze projections over time
 
 ✅ **Type Safety** - Full type hints with mypy checking
 
@@ -137,20 +140,57 @@ This displays:
 
 ## Historical Tracking
 
-Track your projections over time:
+Save and analyze your dividend projections over time.
+
+### Save Current Projection
 
 ```bash
-# Save today's projection
+# Save today's projection to historical data
 uv run dividend-tracker --save-historical
+```
 
-# View all historical runs
+Running this daily builds a history of your portfolio's projected performance.
+
+### View Historical Data
+
+```bash
+# View the most recent historical projection
+uv run dividend-tracker --view-historical latest
+
+# View projection from a specific date
+uv run dividend-tracker --view-historical 2025-10-08
+
+# Show summary of all historical runs
 uv run dividend-tracker --show-history
 ```
 
-Historical data is stored in `data/historical/` (not tracked in git) and shows:
-- Total number of runs
-- Date range of tracking
-- Recent projection dates
+### Analyze Trends
+
+```bash
+# Show portfolio trends over last 90 days (default)
+uv run dividend-tracker --historical-trend
+
+# Show trends over last 30 days
+uv run dividend-tracker --historical-trend --trend-days 30
+
+# Show trends over last 180 days
+uv run dividend-tracker --historical-trend --trend-days 180
+```
+
+The trend analysis shows:
+
+- Portfolio value changes over time
+- Annual dividend income changes
+- Portfolio yield trends
+- Day-to-day percentage changes
+- Period summary with total changes
+
+### Historical Data Storage
+
+- Historical data is stored in `data/historical/` as JSON files
+- Files are named by date: `projection_YYYY-MM-DD.json`
+- Running with `--save-historical` on the same day overwrites that day's data
+- Historical data is NOT tracked in git (excluded via .gitignore)
 
 ## Module Responsibilities
 
