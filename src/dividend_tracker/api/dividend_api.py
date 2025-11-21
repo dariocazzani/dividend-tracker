@@ -51,7 +51,10 @@ def is_cache_valid(cache_path: Path) -> bool:
 
 def save_to_cache(symbol: str, dividends: pd.Series) -> None:
     """Save dividend data to cache."""
-    div_dict = {date.isoformat(): float(amount) for date, amount in dividends.items()}
+    div_dict = {}
+    for date, amount in dividends.items():
+        date_str = date.isoformat() if hasattr(date, "isoformat") else str(date)  # type: ignore[union-attr]
+        div_dict[date_str] = float(amount)
 
     cache_data = {"timestamp": datetime.now().isoformat(), "symbol": symbol, "dividends": div_dict}
 

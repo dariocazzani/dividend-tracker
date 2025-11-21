@@ -19,6 +19,14 @@ PORTFOLIO_FILE = "data/portfolio.csv"
 Portfolio = dict[str, dict[str, float | None]]
 
 
+def parse_number(value: str) -> float:
+    """
+    Parse a number string that may contain commas as thousands separators.
+    Examples: "1,234.56" -> 1234.56, "1234.56" -> 1234.56
+    """
+    return float(value.replace(",", ""))
+
+
 def load_portfolio(portfolio_path: str | Path | None = None) -> Portfolio:
     """
     Load portfolio from CSV file.
@@ -52,7 +60,11 @@ def load_portfolio(portfolio_path: str | Path | None = None) -> Portfolio:
             reader = csv.DictReader(f)
 
             # Validate headers
-            if "symbol" not in reader.fieldnames or "shares" not in reader.fieldnames:
+            if (
+                not reader.fieldnames
+                or "symbol" not in reader.fieldnames
+                or "shares" not in reader.fieldnames
+            ):
                 console.print("[red]Error: CSV must have 'symbol' and 'shares' columns[/red]")
                 sys.exit(1)
 
@@ -63,7 +75,7 @@ def load_portfolio(portfolio_path: str | Path | None = None) -> Portfolio:
                     continue
 
                 try:
-                    shares = float(row["shares"])
+                    shares = parse_number(row["shares"])
                 except ValueError:
                     logger.warning(f"Invalid shares value for {symbol}, skipping")
                     continue
@@ -72,7 +84,7 @@ def load_portfolio(portfolio_path: str | Path | None = None) -> Portfolio:
                 cost_basis: float | None = None
                 if "cost_basis" in row and row["cost_basis"].strip():
                     try:
-                        cost_basis = float(row["cost_basis"])
+                        cost_basis = parse_number(row["cost_basis"])
                     except ValueError:
                         logger.warning(f"Invalid cost_basis for {symbol}")
 
