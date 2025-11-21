@@ -135,11 +135,11 @@ def main() -> None:
     if args.compare:
         from .core import compare_portfolios, display_comparison
 
-        results = compare_portfolios(
+        comparison_results = compare_portfolios(
             portfolio_files=args.compare, months_ahead=args.months, use_cache=not args.no_cache
         )
 
-        display_comparison(results)
+        display_comparison(comparison_results)
         console.print()
         return  # Exit after comparison
 

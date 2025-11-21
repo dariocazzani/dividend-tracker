@@ -42,10 +42,18 @@ def export_to_csv(
         writer = csv.writer(f)
         writer.writerow(["Date", "Symbol", "Amount Per Share", "Shares", "Total"])
 
-        for detail in sorted(dividend_details, key=lambda x: x["date"]):
+        sorted_details = sorted(
+            dividend_details,
+            key=lambda x: x["date"] if isinstance(x["date"], datetime) else datetime.min,
+        )
+        for detail in sorted_details:
+            date_val = detail["date"]
+            date_str = (
+                date_val.strftime("%Y-%m-%d") if isinstance(date_val, datetime) else str(date_val)
+            )
             writer.writerow(
                 [
-                    detail["date"].strftime("%Y-%m-%d"),
+                    date_str,
                     detail["symbol"],
                     f"{detail['amount_per_share']:.4f}",
                     f"{detail['shares']:.0f}",

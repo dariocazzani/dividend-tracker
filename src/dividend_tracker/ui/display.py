@@ -49,13 +49,17 @@ def display_portfolio_metrics(
         value_str = f"${data['current_value']:.2f}"
 
         # Format cost basis and gain/loss
-        if data["cost_basis"]:
-            cost_str = f"${data['cost_basis']:.2f}"
-            gain_str = f"${data['gain_loss']:.2f}"
-            if data["gain_loss"] >= 0:
-                gain_str = f"[green]{gain_str} ({data['gain_loss_pct']:.1f}%)[/green]"
+        cost_basis = data["cost_basis"]
+        gain_loss = data["gain_loss"]
+        gain_loss_pct = data["gain_loss_pct"]
+
+        if cost_basis is not None and gain_loss is not None and gain_loss_pct is not None:
+            cost_str = f"${cost_basis:.2f}"
+            gain_str = f"${gain_loss:.2f}"
+            if gain_loss >= 0:
+                gain_str = f"[green]{gain_str} ({gain_loss_pct:.1f}%)[/green]"
             else:
-                gain_str = f"[red]{gain_str} ({data['gain_loss_pct']:.1f}%)[/red]"
+                gain_str = f"[red]{gain_str} ({gain_loss_pct:.1f}%)[/red]"
         else:
             cost_str = "N/A"
             gain_str = "N/A"
@@ -64,7 +68,11 @@ def display_portfolio_metrics(
         annual_div = stock_annual_dividends.get(symbol, 0)
         annual_div_str = f"${annual_div:.2f}"
 
-        div_yield = (annual_div / data["current_value"]) * 100 if data["current_value"] > 0 else 0
+        current_value = data["current_value"]
+        if current_value is not None and current_value > 0:
+            div_yield = (annual_div / current_value) * 100
+        else:
+            div_yield = 0.0
         yield_str = f"{div_yield:.2f}%"
 
         table.add_row(
@@ -130,18 +138,33 @@ def display_dividend_projections(
     if show_details:
         table.add_column("Details", style="dim", justify="left")
 
-    total_annual = 0
+    total_annual = 0.0
     for month, amount in sorted_months:
         total_annual += amount
 
         if show_details:
-            month_details = [d for d in dividend_details if d["date"].strftime("%B %Y") == month]
-
-            details_lines = [
-                f"{d['symbol']}: {d['date'].strftime('%m/%d')} - "
-                f"${d['amount_per_share']:.4f} × {d['shares']:.0f} = ${d['total']:.2f}"
-                for d in sorted(month_details, key=lambda x: x["date"])
+            month_details = [
+                d
+                for d in dividend_details
+                if isinstance(d["date"], datetime) and d["date"].strftime("%B %Y") == month
             ]
+
+            details_lines = []
+            sorted_details = sorted(
+                month_details,
+                key=lambda x: x["date"] if isinstance(x["date"], datetime) else datetime.min,
+            )
+            for d in sorted_details:
+                date_str = (
+                    d["date"].strftime("%m/%d")
+                    if isinstance(d["date"], datetime)
+                    else str(d["date"])
+                )
+                line = (
+                    f"{d['symbol']}: {date_str} - "
+                    f"${d['amount_per_share']:.4f} × {d['shares']:.0f} = ${d['total']:.2f}"
+                )
+                details_lines.append(line)
 
             table.add_row(month, f"${amount:.2f}", "\n".join(details_lines))
         else:

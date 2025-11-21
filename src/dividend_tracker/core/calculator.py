@@ -40,10 +40,13 @@ def estimate_future_dividends(
         return []
 
     # Convert to sorted list
-    div_list = [
-        (date.to_pydatetime() if hasattr(date, "to_pydatetime") else date, amount)
-        for date, amount in dividends.items()
-    ]
+    div_list: list[tuple[datetime, float]] = []
+    for date, amount in dividends.items():
+        if hasattr(date, "to_pydatetime"):
+            dt: datetime = date.to_pydatetime()  # type: ignore[union-attr]
+        else:
+            dt = date  # type: ignore[assignment]
+        div_list.append((dt, float(amount)))
     div_list.sort(key=lambda x: x[0])
 
     # Calculate average interval between dividends
