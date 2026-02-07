@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from dividend_tracker.api import get_current_price, get_dividend_data
+from dividend_tracker.api import get_current_price, get_dividend_data, get_yield_rate
 from dividend_tracker.constants import (
     MAX_PROJECTED_DIVIDENDS,
     MONTHLY_INTERVAL_MAX,
@@ -125,7 +125,16 @@ def calculate_dividends(
         logger.info(f"Processing {symbol}")
 
         dividends = get_dividend_data(symbol, use_cache=use_cache)
+
+        # Fallback: use yield rate for funds without dividend history
         if dividends is None or dividends.empty:
+            yield_rate = get_yield_rate(symbol)
+            if yield_rate:
+                price = get_current_price(symbol, use_cache=use_cache)
+                if price:
+                    annual_div = price * yield_rate * shares
+                    stock_annual_dividends[symbol] = annual_div
+                    logger.info(f"{symbol}: yield {yield_rate:.2%} -> ${annual_div:.2f}/yr")
             continue
 
         future_dividends, frequency, avg_interval = estimate_future_dividends(

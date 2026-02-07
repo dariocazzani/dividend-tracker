@@ -134,6 +134,21 @@ def get_dividend_data(symbol: str, use_cache: bool = True) -> pd.Series | None: 
         return None
 
 
+def get_yield_rate(symbol: str) -> float | None:
+    """Get dividend yield rate from ticker info (fallback for funds without history)."""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        yield_rate = info.get("yield") or info.get("dividendYield")
+        if yield_rate and yield_rate > 0:
+            logger.debug(f"Got yield rate for {symbol}: {yield_rate:.4f}")
+            return float(yield_rate)
+        return None
+    except Exception as e:
+        logger.debug(f"Error fetching yield for {symbol}: {e}")
+        return None
+
+
 def get_current_price(symbol: str, use_cache: bool = True) -> float | None:
     """Get current stock price with caching."""
     if use_cache:
