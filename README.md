@@ -14,24 +14,27 @@ uv run dividend-tracker
 
 That's it. The tool will:
 - Load your portfolio from `data/portfolio.csv`
-- Fetch current prices and dividend data
 - Show your portfolio summary, positions, upcoming dividends, and historical trend
 - Auto-save today's snapshot for tracking over time
 
 ## Portfolio File
 
-Create `data/portfolio.csv`:
+Drop your **Fidelity CSV export** directly into `data/portfolio.csv` - it works automatically.
+
+Or use a simple format:
 
 ```csv
 symbol,shares,cost_basis
 AAPL,50,150.00
 VTI,100,200.00
-SCHD,200,75.50
 ```
 
-- `symbol` - Ticker symbol (or full name with ticker in parentheses like `VANGUARD (XNAS:VTI)`)
-- `shares` - Number of shares
-- `cost_basis` - Optional: your cost per share for gain/loss tracking
+### Supported Formats
+
+| Format              | How to get it                                    |
+|---------------------|--------------------------------------------------|
+| **Fidelity export** | Fidelity.com → Positions → Download              |
+| **Simple CSV**      | Create with `symbol,shares,cost_basis` columns   |
 
 ## What You'll See
 
@@ -49,7 +52,6 @@ SCHD,200,75.50
 ├────────┼────────┼─────────┼─────┤
 │ VTI    │    100 │  $34k   │     │
 │ SCHD   │    200 │  $18k   │     │
-│ ...    │        │         │     │
 ╰────────┴────────┴─────────┴─────╯
 
        Upcoming Dividends (Feb)
@@ -60,30 +62,22 @@ SCHD,200,75.50
 │ 02/20 │ VTI    │ $85     │
 │       │ Total  │ $210    │
 ╰───────┴────────┴─────────╯
-
-        Historical Trend
-╭────────────┬─────────┬─────────╮
-│ Date       │   Value │ Change  │
-├────────────┼─────────┼─────────┤
-│ 2026-01-21 │ $125k   │ +1.0%   │
-│ 2026-01-07 │ $124k   │ -0.2%   │
-│ ...        │         │         │
-╰────────────┴─────────┴─────────╯
 ```
 
 ## Options
 
 ```bash
-uv run dividend-tracker              # Normal run (auto-saves)
+uv run dividend-tracker              # Normal run (uses Fidelity prices)
+uv run dividend-tracker --live       # Fetch live prices from Yahoo
 uv run dividend-tracker --no-save    # Don't save to history
-uv run dividend-tracker --no-cache   # Force fresh data fetch
+uv run dividend-tracker --no-cache   # Force fresh dividend data fetch
 uv run dividend-tracker --verbose    # Debug logging
 ```
 
 ## How It Works
 
-- **Data Source**: Yahoo Finance (no API key needed)
-- **Caching**: Prices cached 15 min, dividends cached 24 hours
+- **Prices**: Uses values from Fidelity export (or Yahoo with `--live`)
+- **Dividends**: Fetched from Yahoo Finance (cached 24 hours)
 - **History**: Auto-saves daily snapshots to `data/historical/`
 - **Ticker Extraction**: Handles formats like `VANGUARD (XNAS:VTI)` → `VTI`
 

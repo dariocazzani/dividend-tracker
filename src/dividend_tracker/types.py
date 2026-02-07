@@ -4,11 +4,15 @@ from datetime import datetime
 from typing import TypedDict
 
 
-class PositionData(TypedDict):
+class PositionData(TypedDict, total=False):
     """Data for a single portfolio position."""
 
     shares: float | None
-    cost_basis: float | None
+    cost_basis: float | None  # Per-share cost basis
+    # Optional Fidelity export fields (skip API calls when present)
+    current_price: float | None
+    current_value: float | None
+    cost_basis_total: float | None
 
 
 Portfolio = dict[str, PositionData]

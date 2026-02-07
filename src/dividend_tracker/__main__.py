@@ -46,7 +46,12 @@ def main() -> None:
     parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="Bypass cache and fetch fresh data",
+        help="Bypass cache and fetch fresh dividend data",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Fetch live prices from Yahoo instead of using Fidelity export values",
     )
     parser.add_argument(
         "--verbose",
@@ -69,12 +74,14 @@ def main() -> None:
     previous_data = get_previous_run_data()
 
     # Calculate current state
-    with console.status("[cyan]Fetching data...[/cyan]"):
+    status_msg = "[cyan]Fetching live prices...[/cyan]" if args.live else "[cyan]Loading...[/cyan]"
+    with console.status(status_msg):
         results = calculate_all(
             portfolio=portfolio,
             months_ahead=12,
             use_cache=not args.no_cache,
             show_metrics=True,
+            live_prices=args.live,
         )
 
     # Save historical data by default

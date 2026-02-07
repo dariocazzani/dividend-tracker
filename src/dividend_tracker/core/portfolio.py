@@ -63,7 +63,7 @@ def _detect_format(fieldnames: list[str]) -> str:
 
 
 def _load_fidelity_format(reader: csv.DictReader) -> Portfolio:  # type: ignore[type-arg]
-    """Load portfolio from Fidelity export CSV."""
+    """Load portfolio from Fidelity export CSV with full position data."""
     portfolio: Portfolio = {}
 
     for row in reader:
@@ -88,20 +88,26 @@ def _load_fidelity_format(reader: csv.DictReader) -> Portfolio:  # type: ignore[
         shares = parse_number(quantity_str)
 
         # Money market funds: use Current Value as shares (price is ~$1)
+        current_value = parse_number(row.get("Current Value") or "")
         if shares is None:
-            current_value_str = row.get("Current Value") or ""
-            shares = parse_number(current_value_str)
+            shares = current_value
 
         if shares is None:
             logger.warning(f"No quantity for {symbol}, skipping")
             continue
 
-        cost_basis: float | None = None
-        avg_cost_str = row.get("Average Cost Basis") or ""
-        if avg_cost_str:
-            cost_basis = parse_number(avg_cost_str)
+        # Extract all available Fidelity data
+        current_price = parse_number(row.get("Last Price") or "")
+        cost_basis = parse_number(row.get("Average Cost Basis") or "")
+        cost_basis_total = parse_number(row.get("Cost Basis Total") or "")
 
-        portfolio[symbol] = {"shares": shares, "cost_basis": cost_basis}
+        portfolio[symbol] = {
+            "shares": shares,
+            "cost_basis": cost_basis,
+            "current_price": current_price,
+            "current_value": current_value,
+            "cost_basis_total": cost_basis_total,
+        }
 
     return portfolio
 

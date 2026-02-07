@@ -130,7 +130,8 @@ def calculate_dividends(
         if dividends is None or dividends.empty:
             yield_rate = get_yield_rate(symbol)
             if yield_rate:
-                price = get_current_price(symbol, use_cache=use_cache)
+                # Use Fidelity price if available, otherwise fetch from Yahoo
+                price = data.get("current_price") or get_current_price(symbol, use_cache=use_cache)
                 if price:
                     annual_div = price * yield_rate * shares
                     stock_annual_dividends[symbol] = annual_div
@@ -169,6 +170,7 @@ def calculate_dividends(
 def calculate_metrics(
     portfolio: Portfolio,
     use_cache: bool = True,
+    live_prices: bool = False,
 ) -> tuple[StockMetrics, float, float]:
     """
     Calculate portfolio value and metrics.
@@ -176,6 +178,7 @@ def calculate_metrics(
     Args:
         portfolio: Portfolio dictionary
         use_cache: Whether to use cached price data
+        live_prices: If True, always fetch from Yahoo. If False, use Fidelity data when available.
 
     Returns:
         Tuple of (metrics_dict, total_value, total_cost)
@@ -185,27 +188,37 @@ def calculate_metrics(
     total_cost = 0.0
 
     for symbol, data in portfolio.items():
-        shares = data["shares"]
-        cost_basis_per_share = data["cost_basis"]
-
+        shares = data.get("shares")
         if shares is None:
             continue
 
-        current_price = get_current_price(symbol, use_cache=use_cache)
+        # Use Fidelity data if available and not requesting live prices
+        fidelity_value = data.get("current_value")
+        fidelity_price = data.get("current_price")
+        fidelity_cost_total = data.get("cost_basis_total")
 
-        if not current_price:
-            continue
+        if not live_prices and fidelity_value is not None:
+            # Use Fidelity's pre-calculated values
+            current_value = fidelity_value
+            current_price = fidelity_price or (fidelity_value / shares if shares > 0 else None)
+            cost_basis = fidelity_cost_total
+        else:
+            # Fetch live price from Yahoo
+            current_price = get_current_price(symbol, use_cache=use_cache)
+            if not current_price:
+                continue
+            current_value = shares * current_price
+            # Calculate cost basis from per-share cost
+            cost_basis_per_share = data.get("cost_basis")
+            cost_basis = shares * cost_basis_per_share if cost_basis_per_share else None
 
-        current_value = shares * current_price
         total_value += current_value
 
-        if cost_basis_per_share:
-            cost_basis = shares * cost_basis_per_share
+        if cost_basis:
             total_cost += cost_basis
             gain_loss = current_value - cost_basis
             gain_loss_pct = (gain_loss / cost_basis) * 100 if cost_basis > 0 else 0
         else:
-            cost_basis = None
             gain_loss = None
             gain_loss_pct = None
 
@@ -218,7 +231,10 @@ def calculate_metrics(
             "gain_loss_pct": gain_loss_pct,
         }
 
-        logger.debug(f"{symbol}: {shares} shares @ ${current_price:.2f} = ${current_value:.2f}")
+        if current_price:
+            logger.debug(f"{symbol}: {shares} shares @ ${current_price:.2f} = ${current_value:.2f}")
+        else:
+            logger.debug(f"{symbol}: {shares} shares = ${current_value:.2f}")
 
     return metrics, total_value, total_cost
 
@@ -228,6 +244,7 @@ def calculate_all(
     months_ahead: int = 12,
     use_cache: bool = True,
     show_metrics: bool = True,
+    live_prices: bool = False,
     on_symbol_start: SymbolStartCallback | None = None,
     on_symbol_data: SymbolDataCallback | None = None,
 ) -> CalculationResults:
@@ -239,6 +256,7 @@ def calculate_all(
         months_ahead: Number of months to project
         use_cache: Whether to use cached data
         show_metrics: Whether to calculate portfolio metrics
+        live_prices: If True, fetch live prices from Yahoo instead of using Fidelity data
         on_symbol_start: Callback when starting to process a symbol
         on_symbol_data: Callback with symbol data (symbol, hist_count, proj_count, freq, interval)
 
@@ -263,7 +281,9 @@ def calculate_all(
 
     if show_metrics:
         logger.info("Calculating portfolio metrics")
-        metrics, total_value, total_cost = calculate_metrics(portfolio, use_cache=use_cache)
+        metrics, total_value, total_cost = calculate_metrics(
+            portfolio, use_cache=use_cache, live_prices=live_prices
+        )
 
         results["metrics"] = metrics
         results["total_value"] = total_value
