@@ -40,14 +40,104 @@ def extract_ticker(raw_symbol: str) -> str:
     return raw_symbol.strip().upper()
 
 
-def parse_number(value: str) -> float:
-    """Parse a number string that may contain commas as thousands separators."""
-    return float(value.replace(",", ""))
+def parse_number(value: str) -> float | None:
+    """Parse a number string that may contain $, commas, or be n/a."""
+    cleaned = value.strip().replace(",", "").replace("$", "")
+    if not cleaned or cleaned.lower() in ("n/a", "--", ""):
+        return None
+    return float(cleaned)
+
+
+def _detect_format(fieldnames: list[str]) -> str:
+    """Detect CSV format based on column names."""
+    # Normalize fieldnames (remove BOM, whitespace)
+    normalized = [f.strip().lstrip("\ufeff") for f in fieldnames]
+
+    # Fidelity export format
+    if "Symbol" in normalized and "Quantity" in normalized:
+        return "fidelity"
+    # Simple format (symbol, shares, cost_basis)
+    if "symbol" in normalized and "shares" in normalized:
+        return "simple"
+    return "unknown"
+
+
+def _load_fidelity_format(reader: csv.DictReader) -> Portfolio:  # type: ignore[type-arg]
+    """Load portfolio from Fidelity export CSV."""
+    portfolio: Portfolio = {}
+
+    for row in reader:
+        # Handle None values and empty rows
+        if not row or all(v is None for v in row.values()):
+            continue
+
+        symbol = (row.get("Symbol") or "").strip()
+        if not symbol:
+            continue
+
+        # Skip summary/pending rows
+        if symbol.lower() in ("pending activity",) or symbol.startswith('"'):
+            continue
+
+        # Clean up symbol (remove ** suffix for money market)
+        symbol = symbol.rstrip("*")
+        symbol = extract_ticker(symbol)
+
+        # Get quantity - for money market (SPAXX), use Current Value as shares
+        quantity_str = row.get("Quantity") or ""
+        shares = parse_number(quantity_str)
+
+        # Money market funds: use Current Value as shares (price is ~$1)
+        if shares is None:
+            current_value_str = row.get("Current Value") or ""
+            shares = parse_number(current_value_str)
+
+        if shares is None:
+            logger.warning(f"No quantity for {symbol}, skipping")
+            continue
+
+        cost_basis: float | None = None
+        avg_cost_str = row.get("Average Cost Basis") or ""
+        if avg_cost_str:
+            cost_basis = parse_number(avg_cost_str)
+
+        portfolio[symbol] = {"shares": shares, "cost_basis": cost_basis}
+
+    return portfolio
+
+
+def _load_simple_format(reader: csv.DictReader) -> Portfolio:  # type: ignore[type-arg]
+    """Load portfolio from simple CSV format (symbol, shares, cost_basis)."""
+    portfolio: Portfolio = {}
+
+    for row in reader:
+        raw_symbol = row["symbol"].strip()
+        if not raw_symbol:
+            continue
+
+        symbol = extract_ticker(raw_symbol)
+
+        shares = parse_number(row["shares"])
+        if shares is None:
+            logger.warning(f"Invalid shares value for {symbol}, skipping")
+            continue
+
+        cost_basis: float | None = None
+        if "cost_basis" in row and row["cost_basis"].strip():
+            cost_basis = parse_number(row["cost_basis"])
+
+        portfolio[symbol] = {"shares": shares, "cost_basis": cost_basis}
+
+    return portfolio
 
 
 def load_portfolio(portfolio_path: str | Path | None = None) -> Portfolio:
     """
     Load portfolio from CSV file.
+
+    Supports two formats:
+    1. Fidelity export (Symbol, Quantity, Average Cost Basis, ...)
+    2. Simple format (symbol, shares, cost_basis)
 
     Args:
         portfolio_path: Optional custom path to portfolio file
@@ -65,37 +155,21 @@ def load_portfolio(portfolio_path: str | Path | None = None) -> Portfolio:
     if not path.exists():
         raise PortfolioFileNotFoundError(str(path))
 
-    portfolio: Portfolio = {}
-
-    with open(path) as f:
+    with open(path, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+        fieldnames = list(reader.fieldnames or [])
 
-        if not reader.fieldnames or "symbol" not in reader.fieldnames:
-            raise PortfolioInvalidFormatError("CSV must have 'symbol' column")
-        if "shares" not in reader.fieldnames:
-            raise PortfolioInvalidFormatError("CSV must have 'shares' column")
+        fmt = _detect_format(fieldnames)
 
-        for row in reader:
-            raw_symbol = row["symbol"].strip()
-            if not raw_symbol:
-                continue
-
-            symbol = extract_ticker(raw_symbol)
-
-            try:
-                shares = parse_number(row["shares"])
-            except ValueError:
-                logger.warning(f"Invalid shares value for {symbol}, skipping")
-                continue
-
-            cost_basis: float | None = None
-            if "cost_basis" in row and row["cost_basis"].strip():
-                try:
-                    cost_basis = parse_number(row["cost_basis"])
-                except ValueError:
-                    logger.warning(f"Invalid cost_basis for {symbol}")
-
-            portfolio[symbol] = {"shares": shares, "cost_basis": cost_basis}
+        if fmt == "fidelity":
+            logger.info("Detected Fidelity export format")
+            portfolio = _load_fidelity_format(reader)
+        elif fmt == "simple":
+            portfolio = _load_simple_format(reader)
+        else:
+            raise PortfolioInvalidFormatError(
+                "CSV must have either 'Symbol'+'Quantity' (Fidelity) or 'symbol'+'shares' columns"
+            )
 
     if not portfolio:
         raise PortfolioEmptyError(str(path))
