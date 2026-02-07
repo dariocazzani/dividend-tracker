@@ -1,7 +1,4 @@
-"""
-Dividend API module.
-Handles fetching dividend data from yfinance with caching.
-"""
+"""Dividend API module. Handles fetching dividend data from yfinance with caching."""
 
 import json
 from datetime import datetime, timedelta
@@ -10,12 +7,15 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-from ..utils import get_logger
+from dividend_tracker.constants import (
+    CACHE_DIR,
+    CACHE_EXPIRY_HOURS,
+    DIVIDEND_HISTORY_YEARS,
+    PRICE_CACHE_EXPIRY_MINUTES,
+)
+from dividend_tracker.utils import get_logger
 
 logger = get_logger("api")
-
-CACHE_DIR = Path("data/.cache")
-CACHE_EXPIRY_HOURS = 24
 
 
 def ensure_cache_dir() -> None:
@@ -26,69 +26,91 @@ def ensure_cache_dir() -> None:
         gitignore.write_text("*\n")
 
 
-def get_cache_path(symbol: str) -> Path:
-    """Get cache file path for a symbol."""
+def _get_dividend_cache_path(symbol: str) -> Path:
     return CACHE_DIR / f"{symbol}_dividends.json"
 
 
-def is_cache_valid(cache_path: Path) -> bool:
+def _get_price_cache_path(symbol: str) -> Path:
+    return CACHE_DIR / f"{symbol}_price.json"
+
+
+def _is_cache_valid(cache_path: Path, expiry_hours: float) -> bool:
     """Check if cache file exists and is not expired."""
     if not cache_path.exists():
         return False
-
     try:
         with open(cache_path) as f:
             data = json.load(f)
-
         cached_time = datetime.fromisoformat(data["timestamp"])
         age_hours = (datetime.now() - cached_time).total_seconds() / 3600
-
-        return age_hours < CACHE_EXPIRY_HOURS
-    except Exception as e:
+        return age_hours < expiry_hours
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.debug(f"Cache validation failed for {cache_path}: {e}")
         return False
 
 
-def save_to_cache(symbol: str, dividends: pd.Series) -> None:
+def _save_dividends_to_cache(symbol: str, dividends: pd.Series) -> None:  # type: ignore[type-arg]
     """Save dividend data to cache."""
-    div_dict = {}
-    for date, amount in dividends.items():
-        date_str = date.isoformat() if hasattr(date, "isoformat") else str(date)  # type: ignore[union-attr]
-        div_dict[date_str] = float(amount)
+    ensure_cache_dir()
+    div_dict: dict[str, float] = {}
+    for idx, amount in zip(dividends.index, dividends.values, strict=False):
+        date_obj = pd.Timestamp(idx).to_pydatetime()
+        div_dict[date_obj.isoformat()] = float(amount)
 
     cache_data = {"timestamp": datetime.now().isoformat(), "symbol": symbol, "dividends": div_dict}
 
-    with open(get_cache_path(symbol), "w") as f:
+    with open(_get_dividend_cache_path(symbol), "w") as f:
         json.dump(cache_data, f)
+    logger.debug(f"Saved {symbol} dividends to cache")
 
-    logger.debug(f"Saved {symbol} to cache")
 
-
-def load_from_cache(symbol: str) -> pd.Series | None:
-    """Load dividend data from cache, return as pandas Series."""
+def _load_dividends_from_cache(symbol: str) -> pd.Series | None:  # type: ignore[type-arg]
+    """Load dividend data from cache."""
     try:
-        with open(get_cache_path(symbol)) as f:
+        with open(_get_dividend_cache_path(symbol)) as f:
             data = json.load(f)
-
         dates = [datetime.fromisoformat(d) for d in data["dividends"]]
         values = list(data["dividends"].values())
         return pd.Series(values, index=dates)
-    except Exception as e:
+    except (json.JSONDecodeError, KeyError, ValueError, FileNotFoundError) as e:
         logger.debug(f"Failed to load {symbol} from cache: {e}")
         return None
 
 
-def get_dividend_data(symbol: str, use_cache: bool = True) -> pd.Series | None:
-    """
-    Fetch dividend data for a symbol.
-    Returns pandas Series with 2 years of dividend history.
-    """
-    # Try cache first
-    if use_cache and is_cache_valid(get_cache_path(symbol)):
-        logger.debug(f"Using cached data for {symbol}")
-        return load_from_cache(symbol)
+def _save_price_to_cache(symbol: str, price: float) -> None:
+    """Save price data to cache."""
+    ensure_cache_dir()
+    cache_data = {"timestamp": datetime.now().isoformat(), "symbol": symbol, "price": price}
+    with open(_get_price_cache_path(symbol), "w") as f:
+        json.dump(cache_data, f)
+    logger.debug(f"Saved {symbol} price to cache")
 
-    # Fetch from API
+
+def _load_price_from_cache(symbol: str) -> float | None:
+    """Load price from cache if valid."""
+    cache_path = _get_price_cache_path(symbol)
+    expiry_hours = PRICE_CACHE_EXPIRY_MINUTES / 60
+
+    if not _is_cache_valid(cache_path, expiry_hours):
+        return None
+
+    try:
+        with open(cache_path) as f:
+            data = json.load(f)
+        return float(data["price"])
+    except (json.JSONDecodeError, KeyError, ValueError, FileNotFoundError) as e:
+        logger.debug(f"Failed to load {symbol} price from cache: {e}")
+        return None
+
+
+def get_dividend_data(symbol: str, use_cache: bool = True) -> pd.Series | None:  # type: ignore[type-arg]
+    """Fetch dividend data for a symbol. Returns 2 years of dividend history."""
+    cache_path = _get_dividend_cache_path(symbol)
+
+    if use_cache and _is_cache_valid(cache_path, CACHE_EXPIRY_HOURS):
+        logger.debug(f"Using cached data for {symbol}")
+        return _load_dividends_from_cache(symbol)
+
     try:
         logger.debug(f"Fetching {symbol} from yfinance")
         ticker = yf.Ticker(symbol)
@@ -98,14 +120,12 @@ def get_dividend_data(symbol: str, use_cache: bool = True) -> pd.Series | None:
             logger.warning(f"No dividend history for {symbol}")
             return None
 
-        # Filter to recent 2 years
-        cutoff_date = datetime.now() - timedelta(days=365 * 2)
+        cutoff_date = datetime.now() - timedelta(days=365 * DIVIDEND_HISTORY_YEARS)
         dividends.index = dividends.index.tz_localize(None)
         dividends = dividends[dividends.index >= cutoff_date]
 
-        # Save to cache
         if use_cache:
-            save_to_cache(symbol, dividends)
+            _save_dividends_to_cache(symbol, dividends)
 
         return dividends
 
@@ -114,8 +134,14 @@ def get_dividend_data(symbol: str, use_cache: bool = True) -> pd.Series | None:
         return None
 
 
-def get_current_price(symbol: str) -> float | None:
-    """Get current stock price."""
+def get_current_price(symbol: str, use_cache: bool = True) -> float | None:
+    """Get current stock price with caching."""
+    if use_cache:
+        cached_price = _load_price_from_cache(symbol)
+        if cached_price is not None:
+            logger.debug(f"Using cached price for {symbol}: ${cached_price:.2f}")
+            return cached_price
+
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
@@ -124,6 +150,8 @@ def get_current_price(symbol: str) -> float | None:
         )
         if price:
             logger.debug(f"Current price for {symbol}: ${price:.2f}")
+            if use_cache:
+                _save_price_to_cache(symbol, price)
         return price
     except Exception as e:
         logger.error(f"Error fetching price for {symbol}: {e}")
