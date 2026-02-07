@@ -11,7 +11,7 @@ def setup_logging(verbose: bool = False) -> None:
     Args:
         verbose: If True, set log level to DEBUG, otherwise INFO
     """
-    log_level = logging.DEBUG if verbose else logging.INFO
+    log_level = logging.DEBUG if verbose else logging.WARNING
 
     # Create formatter
     formatter = logging.Formatter(
